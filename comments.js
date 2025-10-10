@@ -1,113 +1,32 @@
-///generate web server
+//Create web server
 const express = require('express');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
 const Comment = require('../models/Comment');
-const Post = require('../models/Post');
-const User = require('../models/User');
 
-// Middleware to check if user is authenticated
-function isAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    res.status(401).json({ message: 'Unauthorized' });
-}
-
-// Create a new comment
-router.post('/',
-    isAuthenticated,
-    body('postId').notEmpty().withMessage('Post ID is required'),
-    body('content').notEmpty().withMessage('Content is required'),
-    async (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
-        }
-
-        const { postId, content } = req.body;
-
-        try {
-            const post = await Post.findById(postId);
-            if (!post) {
-                return res.status(404).json({ message: 'Post not found' });
-            }
-
-            const comment = new Comment({
-                post: postId,
-                user: req.user._id,
-                content
-            });
-
-            await comment.save();
-            res.status(201).json(comment);
-        } catch (err) {
-            res.status(500).json({ message: 'Server error' });
-        }
-    }
-);
-
-// Get comments for a specific post
-router.get('/post/:postId', async (req, res) => {
-    const { postId } = req.params;
-
+//Get all comments
+router.get('/', async (req, res) => {
     try {
-        const comments = await Comment.find({ post: postId }).populate('user', 'username').sort({ createdAt: -1 });
+        const comments = await Comment.find();
         res.json(comments);
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: err.message });
     }
 });
 
-// Update a comment
-router.put('/:commentId',
-    isAuthenticated,
-    body('content').notEmpty().withMessage('Content is required'),
-    async (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
-        }
+//Get one comment
+router.get('/:id', getComment, (req, res) => {
+    res.json(res.comment);
+});
 
-        const { commentId } = req.params;
-        const { content } = req.body;
-
-        try {
-            const comment = await Comment.findById(commentId);
-            if (!comment) {
-                return res.status(404).json({ message: 'Comment not found' });
-            }
-
-            if (comment.user.toString() !== req.user._id.toString()) {
-                return res.status(403).json({ message: 'Forbidden' });
-            }
-
-            comment.content = content;
-            await comment.save();
-            res.json(comment);
-        } catch (err) {
-            res.status(500).json({ message: 'Server error' });
-        }
-    }
-);
-
-// Delete a comment
-router.delete('/:commentId', isAuthenticated, async (req, res) => {
-    const { commentId } = req.params;
-
+//Create one comment
+router.post('/', async (req, res) => {
+    const comment = new Comment({
+        text: req.body.text,  
+    });
     try {
-        const comment = await Comment.findById(commentId);
-        if (!comment) {
-            return res.status(404).json({ message: 'Comment not found' });
-        }
-
-        if (comment.user.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Forbidden' });
-        }
-
-        await comment.remove();
-        res.json({ message: 'Comment deleted' });
+        const newComment = await comment.save();
+        res.status(201).json(newComment);
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(400).json({ message: err.message });
     }
 });
